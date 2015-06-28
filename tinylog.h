@@ -9,13 +9,17 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 using namespace std;
 
 namespace TL
 {
-	namespace type
+	namespace Type
 	{
+		typedef const char* MsgType;
 		typedef unsigned short EnumType;
 		enum class Level : EnumType
 		{
@@ -40,21 +44,91 @@ namespace TL
 		};
 	}
 
-
+	using namespace Type;
 	class TinyLog
 	{
+		
 	public:
 		TinyLog();
 		TinyLog(const string &logger_name);
 		void SetFilePath(const string &path);
 		void SetLoggerName(const string &logger_name);
-		//logging
+		// info logging
 		template<typename T, typename... Args>
-		void info();
-		void error(const char *, ...);
+		void info(MsgType msg, const T& value, const Args&... args)
+		{
+			lock_guard<mutex> lg(msg_lock_);
+			Log_(Level::Info, msg, value, args);
+		}
+		// error logging
+		template<typename T, typename... Args>
+		void error(MsgType msg, const T& value, const Args&... args)
+		{
+			lock_guard<mutex> lg(msg_lock_);
+			Log_(Level::Error, msg, value, args);
+		}
+
+	private:
+		// mutex logging
+		template<typename T, typename... Args>
+		Log_(Level level, MsgType msg, const T& value)
+		{
+			
+		}
+
+		// mutex logging
+		template<typename T, typename... Args>
+		Log_(Level level, MsgType msg, const T& value, const Args&... args)
+		{
+			auto now = std::chrono::system_clock::now();
+			
+		}
+
+		//get level string from level
+		string GetLevelString_(Level level)
+		{
+			switch (level)
+			{
+			case Level::Global:
+				return "GLOBAL";
+			case Level::Error:
+				return "ERROR";
+			case Level::Fatal:
+				return "FATAL";
+			case Level::Debug:
+				return "DEBUG";
+			case Level::Info:
+				return "INFO";
+			case Level::Trace:
+				return "TRACE";
+			case Level::Verbose:
+				return "VERBOSE";
+			case Level::Warning:
+				return "WARNING";
+			default:
+				return "UNKNOWN";
+			}
+		}
+		string GetNowString_()
+		{
+			auto now = std::chrono::system_clock::now();
+
+			chrono::milliseconds ms = chrono::duration_cast<chrono::milliseconds>(
+				now.time_since_epoch());
+			
+			
+			auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+			std::stringstream ss;
+			ss << std::put_time(std::localtime(&in_time_t), "[%F %T.");
+			
+			return ss.str() + to_string(ms.count() % 1000) + "]";
+		}
 	private:
 		string filepath_;
 		string logger_name_;
+		mutex msg_lock_;
+		
 	};
 }
 
