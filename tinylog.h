@@ -1,4 +1,4 @@
-//desc: a small logging library
+//desc: a tiny logging library
 //author: jebin
 
 
@@ -105,50 +105,36 @@ namespace tinylog
 		{
 			b_tofile_ = to_file;
 		}
-		// info logging
-		template<typename T, typename... Args>
-		void info(MsgType msg, const T& value, const Args&... args)
-		{
-			lock_guard<mutex> lg(msg_lock_);
-			
-			if (b_toconsole_)
-				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
-			if (b_tofile_)
-				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
 
-			Log_(msg, value, args...);
+//macro of all loggers
+#define TL_LOGGER_WRITTER(FUNCTION_NAME, LOG_LEVEL) \
+	template<typename T, typename... Args>\
+	void FUNCTION_NAME(MsgType msg, const T& value, const Args&... args)\
+		{\
+			lock_guard<mutex> lg(msg_lock_);\
+			if (b_toconsole_)\
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(LOG_LEVEL) + " ";\
+			if (b_tofile_)\
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(LOG_LEVEL) + " ";\
+			Log_(msg, value, args...);\
+		}\
+		void FUNCTION_NAME(MsgType msg)\
+		{\
+			if (b_toconsole_)\
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(LOG_LEVEL) + " "; \
+			if (b_tofile_)\
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(LOG_LEVEL) + " "; \
+			Log_(msg);\
 		}
 
-		void info(MsgType msg)
-		{
-			if (b_toconsole_)
-				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
-			if (b_tofile_)
-				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
-			Log_(msg);
-		}
-
-		// error logging
-		template<typename T, typename... Args>
-		void error(MsgType msg, const T& value, const Args&... args)
-		{
-			lock_guard<mutex> lg(msg_lock_);
-			if (b_toconsole_)
-				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
-			if (b_tofile_)
-				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
-			Log_(msg, value, args...);
-		}
-		// error logging mutex
-		void error(MsgType msg)
-		{
-			lock_guard<mutex> lg(msg_lock_);
-			if (b_toconsole_)
-				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
-			if (b_tofile_)
-				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
-			Log_(msg);
-		}
+		// define all logger function
+		TL_LOGGER_WRITTER(info, type::Level::Info);
+		TL_LOGGER_WRITTER(error, type::Level::Error);
+		TL_LOGGER_WRITTER(debug, type::Level::Debug);
+		TL_LOGGER_WRITTER(global, type::Level::Global);
+		TL_LOGGER_WRITTER(fatal, type::Level::Fatal);
+		TL_LOGGER_WRITTER(warning, type::Level::Warning);
+		TL_LOGGER_WRITTER(trace, type::Level::Trace);
 
 	private:
 		// mutex logging
