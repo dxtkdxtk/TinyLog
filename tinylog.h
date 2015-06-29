@@ -13,14 +13,22 @@
 #include <iomanip>
 #include <sstream>
 
+#include <Windows.h>
+#include <direct.h>
 using namespace std;
 
-namespace TL
+namespace tinylog
 {
-	namespace Type
+	
+	namespace type
 	{
+		//log msg type
 		typedef const char* MsgType;
+		//enum type
 		typedef unsigned short EnumType;
+		// verbose level type
+		typedef unsigned short VLevelType;
+		//log level type
 		enum class Level : EnumType
 		{
 			/// @brief Generic level that represents all the levels. Useful when setting global configuration for all levels
@@ -44,44 +52,143 @@ namespace TL
 		};
 	}
 
-	using namespace Type;
+	namespace consts
+	{
+		const string default_logger_name = "default";
+		const string default_logpath = "./logs/";
+		const type::VLevelType default_vlevel = 0;
+	}
+
+	using namespace type;
+	using namespace consts;
 	class TinyLog
 	{
 		
 	public:
-		TinyLog();
-		TinyLog(const string &logger_name);
-		void SetFilePath(const string &path);
-		void SetLoggerName(const string &logger_name);
+		TinyLog() : 
+			logger_name_(default_logger_name),
+			log_path_(default_logpath),
+			vlevel_(default_vlevel),
+			b_toconsole_(true),
+			b_tofile_(true),
+			log_path_suffix_(0)
+		{
+			PreprocessLogger();
+		}
+		TinyLog(const string &logger_name):
+			logger_name_(logger_name),
+			log_path_(default_logpath),
+			vlevel_(default_vlevel),
+			b_toconsole_(true),
+			b_tofile_(true),
+			log_path_suffix_(0)
+		{
+			PreprocessLogger();
+		}
+		~TinyLog()
+		{
+			ofile_.close();
+		}
+		void SetLogPath(const string &log_path)
+		{
+			log_path_ = log_path;
+		}
+		void SetLoggerName(const string &logger_name)
+		{
+			logger_name_ = logger_name;
+		}
+		void SwitchToConsole(bool to_console)
+		{
+			b_toconsole_ = to_console;
+		}
+		void SwitchToFile(bool to_file)
+		{
+			b_tofile_ = to_file;
+		}
 		// info logging
 		template<typename T, typename... Args>
 		void info(MsgType msg, const T& value, const Args&... args)
 		{
 			lock_guard<mutex> lg(msg_lock_);
-			Log_(Level::Info, msg, value, args);
+			
+			if (b_toconsole_)
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
+			if (b_tofile_)
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
+
+			Log_(msg, value, args...);
 		}
+
+		void info(MsgType msg)
+		{
+			if (b_toconsole_)
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
+			if (b_tofile_)
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Info) + " ";
+			Log_(msg);
+		}
+
 		// error logging
 		template<typename T, typename... Args>
 		void error(MsgType msg, const T& value, const Args&... args)
 		{
 			lock_guard<mutex> lg(msg_lock_);
-			Log_(Level::Error, msg, value, args);
+			if (b_toconsole_)
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
+			if (b_tofile_)
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
+			Log_(msg, value, args...);
+		}
+		// error logging mutex
+		void error(MsgType msg)
+		{
+			lock_guard<mutex> lg(msg_lock_);
+			if (b_toconsole_)
+				cout << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
+			if (b_tofile_)
+				ofile_ << GetNowString_() << " [" << logger_name_ << "] " << GetLevelString_(type::Level::Error) + " ";
+			Log_(msg);
 		}
 
 	private:
 		// mutex logging
-		template<typename T, typename... Args>
-		Log_(Level level, MsgType msg, const T& value)
+		void Log_(MsgType msg)
 		{
-			
+			if (b_tofile_)
+				ofile_ << msg << endl;
+			if (b_toconsole_)
+				cout << msg << endl;
 		}
 
 		// mutex logging
 		template<typename T, typename... Args>
-		Log_(Level level, MsgType msg, const T& value, const Args&... args)
+		void Log_(MsgType msg, const T& value, const Args&... args)
 		{
-			auto now = std::chrono::system_clock::now();
-			
+			while (*msg)
+			{
+				if (*msg == '%')
+				{
+					if (*(msg + 1) == '%')
+					{
+						++msg;
+					}
+					else
+					{
+						if (b_toconsole_)
+							cout << value;
+						if (b_tofile_)
+							ofile_ << value;
+						msg += 2;
+						Log_(msg, args...);
+						return;
+					}
+				}
+				if (b_toconsole_)
+					cout << *msg++;
+				if (b_tofile_)
+					ofile_ << *msg++;
+			}
+			Log_("");
 		}
 
 		//get level string from level
@@ -109,29 +216,120 @@ namespace TL
 				return "UNKNOWN";
 			}
 		}
+
+		//get now string
 		string GetNowString_()
 		{
-			auto now = std::chrono::system_clock::now();
+			time_t t;
+			tm timeinfo;
+			_time64(&t);
+			localtime_s(&timeinfo, &t);
 
-			chrono::milliseconds ms = chrono::duration_cast<chrono::milliseconds>(
-				now.time_since_epoch());
-			
-			
-			auto in_time_t = std::chrono::system_clock::to_time_t(now);
+			timeval tv;
+			gettimeofday_(&tv);
 
-			std::stringstream ss;
-			ss << std::put_time(std::localtime(&in_time_t), "[%F %T.");
-			
-			return ss.str() + to_string(ms.count() % 1000) + "]";
+			char buffer[80];
+			sprintf(buffer, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+				timeinfo.tm_year + 1900,
+				timeinfo.tm_mon + 1,
+				timeinfo.tm_mday,
+				timeinfo.tm_hour,
+				timeinfo.tm_min,
+				timeinfo.tm_sec,
+				tv.tv_usec / 1000);
+
+			return string(buffer);
 		}
+
+		void gettimeofday_(struct timeval* tv)
+		{
+
+			if (tv != nullptr) {
+				const unsigned __int64 delta_ = 11644473600000000Ui64;
+				const double secOffSet = 0.000001;
+				const unsigned long usecOffSet = 1000000;
+				FILETIME fileTime;
+				GetSystemTimeAsFileTime(&fileTime);
+				unsigned __int64 present = 0;
+				present |= fileTime.dwHighDateTime;
+				present = present << 32;
+				present |= fileTime.dwLowDateTime;
+				present /= 10;  // mic-sec
+				// Subtract the difference
+				present -= delta_;
+				tv->tv_sec = static_cast<long>(present * secOffSet);
+				tv->tv_usec = static_cast<long>(present % usecOffSet);
+			}
+		}
+		
+		bool IsExistFile(const string &file)
+		{
+			ifstream f(file.c_str());
+			if (f.good())
+			{
+				f.close();
+				return true;
+			}
+			else
+			{
+				f.close();
+				return false;
+			}
+			return false;
+		}
+
+		//makedir
+		void makedirs(const char *dir)
+		{
+			if (NULL == dir)
+				return;
+
+			size_t len = strlen(dir);
+
+			char * p = new char[len + 1];
+			strcpy(p, dir);
+			for (int i = 0; i < len; ++i)
+			{
+				char ch = p[i];
+				if ('\\' == ch || '/' == ch)
+				{
+					p[i] = '\0';
+					_mkdir(p);
+					p[i] = ch;
+				}
+			}
+			if (p[len - 1] != '\\' && p[len - 1] != '/')
+				_mkdir(p);
+			delete[] p;
+		}
+		//pre-process logger name
+		void PreprocessLogger()
+		{
+			makedirs(log_path_.c_str());
+			if (log_path_[log_path_.size() - 1] != '/' && log_path_[log_path_.size() - 1] != '\\')
+				log_path_ += '/';
+
+			string logfile = log_path_ + logger_name_;
+			string tmpfile = logfile;
+			while (IsExistFile(tmpfile + ".log"))
+			{
+				tmpfile = logfile + "_" + to_string(log_path_suffix_);
+				++log_path_suffix_;
+			}
+			logfile = tmpfile + ".log";
+			ofile_.open(logfile, ios::app);
+		}
+
 	private:
-		string filepath_;
+		string log_path_;
+		int log_path_suffix_;
 		string logger_name_;
 		mutex msg_lock_;
-		
+		VLevelType vlevel_;
+		bool b_toconsole_;
+		bool b_tofile_;
+		ofstream ofile_;
 	};
 }
-
-
 
 #endif
