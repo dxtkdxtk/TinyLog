@@ -57,6 +57,8 @@ namespace tinylog
 		const string default_logger_name = "default";
 		const string default_logpath = "./logs/";
 		const type::VLevelType default_vlevel = 0;
+		const string default_file_name = "tinylog";
+		const string default_file_suffix = ".log";
 	}
 
 	using namespace type;
@@ -71,19 +73,21 @@ namespace tinylog
 			vlevel_(default_vlevel),
 			b_toconsole_(true),
 			b_tofile_(true),
-			log_path_suffix_(0)
+			log_path_suffix_(0),
+			file_name_(default_file_name)
 		{
-			PreprocessLogger();
+			PreprocessLogger_();
 		}
-		TinyLog(const string &logger_name):
+		TinyLog(const string &logger_name) :
 			logger_name_(logger_name),
 			log_path_(default_logpath),
 			vlevel_(default_vlevel),
 			b_toconsole_(true),
 			b_tofile_(true),
-			log_path_suffix_(0)
+			log_path_suffix_(0),
+			file_name_(default_file_name)
 		{
-			PreprocessLogger();
+			PreprocessLogger_();
 		}
 		~TinyLog()
 		{
@@ -92,10 +96,20 @@ namespace tinylog
 		void SetLogPath(const string &log_path)
 		{
 			log_path_ = log_path;
+			log_path_suffix_ = 0;
+			PreprocessLogger_();
 		}
 		void SetLoggerName(const string &logger_name)
 		{
 			logger_name_ = logger_name;
+			log_path_suffix_ = 0;
+			PreprocessLogger_();
+		}
+		void SetFileName(const string &file_name)
+		{
+			file_name_ = file_name;
+			log_path_suffix_ = 0;
+			PreprocessLogger_();
 		}
 		void SwitchToConsole(bool to_console)
 		{
@@ -248,7 +262,7 @@ namespace tinylog
 			}
 		}
 		
-		bool IsExistFile(const string &file)
+		bool IsExistFile_(const string &file)
 		{
 			ifstream f(file.c_str());
 			if (f.good())
@@ -265,7 +279,7 @@ namespace tinylog
 		}
 
 		//makedir
-		void makedirs(const char *dir)
+		void makedirs_(const char *dir)
 		{
 			if (NULL == dir)
 				return;
@@ -289,15 +303,17 @@ namespace tinylog
 			delete[] p;
 		}
 		//pre-process logger name
-		void PreprocessLogger()
+		void PreprocessLogger_()
 		{
-			makedirs(log_path_.c_str());
+			ofile_.close();
+			makedirs_(log_path_.c_str());
 			if (log_path_[log_path_.size() - 1] != '/' && log_path_[log_path_.size() - 1] != '\\')
 				log_path_ += '/';
 
-			string logfile = log_path_ + logger_name_;
+			string logfile = log_path_ + file_name_;
 			string tmpfile = logfile;
-			while (IsExistFile(tmpfile + ".log"))
+			//每次获取log文件不重复
+			while (IsExistFile_(tmpfile + ".log"))
 			{
 				tmpfile = logfile + "_" + to_string(log_path_suffix_);
 				++log_path_suffix_;
@@ -310,6 +326,7 @@ namespace tinylog
 		string log_path_;
 		int log_path_suffix_;
 		string logger_name_;
+		string file_name_;
 		mutex msg_lock_;
 		VLevelType vlevel_;
 		bool b_toconsole_;
