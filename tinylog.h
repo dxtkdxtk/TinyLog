@@ -313,11 +313,15 @@ namespace tinylog
 			string logfile = log_path_ + file_name_;
 			string tmpfile = logfile;
 			//每次获取log文件不重复
-			while (IsExistFile_(tmpfile + ".log"))
+			if (file_name_ != default_file_name)
 			{
-				tmpfile = logfile + "_" + to_string(log_path_suffix_);
-				++log_path_suffix_;
+				while (IsExistFile_(tmpfile + ".log"))
+				{
+					tmpfile = logfile + "_" + to_string(log_path_suffix_);
+					++log_path_suffix_;
+				}
 			}
+			
 			logfile = tmpfile + ".log";
 			ofile_.open(logfile, ios::app);
 		}
